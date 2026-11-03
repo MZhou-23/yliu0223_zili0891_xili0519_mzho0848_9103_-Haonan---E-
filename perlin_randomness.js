@@ -2,12 +2,12 @@
 function randomChoice(options) {
   return random(options);
 }
+
 function randomBetween(a, b) {
   return random(a, b);
 }
 
-// A repeatable number derived from an id. The time mechanic uses it
-// to give each flower or leaf a different, but stable, random offset.
+// Give each flower or leaf a stable noise offset.
 function stableNoiseOffset(id) {
   let name = "" + id;
   let characters = "abcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -38,10 +38,10 @@ class Sunflower {
     this.petalLengthScale = random(a.petalLengthScales);
     this.petalAngleOffset = random(a.petalOffsetOptions);
     this.centerDesign = random(a.centerDesigns);
+    this.centerDetailShape = "circle";
     this.growthDelay = growthDelay;
     initializePerlinNoiseState(this);
-    this.droopDirection = random([-1, 1]); 
-   
+    this.droopDirection = random([-1, 1]);
     initializeFlowerState(this);
   }
 }
@@ -55,19 +55,148 @@ function createSmallFlowerLooks() {
   for (let i = 0; i < visualSmallFlowers.length; i++) {
     smallFlowerLooks.push({
       shape: sunflowerAppearanceOptions.smallFlowerShapes[0],
-      color: random(sunflowerAppearanceOptions.smallRedFlowerPetalColors)
+      color: random(
+        sunflowerAppearanceOptions.smallRedFlowerPetalColors
+      )
     });
   }
 }
 
-// PERLIN NOISE MODULE
+// Maximum number of sparkle points
+let SPARKLE_COUNT = 4;
+// Refresh each sparkle every 60 frames (about 1 second)
+let SPARKLE_REFRESH_FRAMES = 60;
+// SVG layer and sparkle data
+let sparkleLayer = null;
+let sparkles = [];
 
+// Create the sparkle graphics
+function setupSparkles() {
+  // Only create the graphics once
+  if (sparkleLayer !== null) {
+    return;
+  }
+  sparkleLayer = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "g"
+  );
+  sparkleLayer.setAttribute("id", "orange-sparkles");
+  sparkleLayer.setAttribute("pointer-events", "none");
+  svgRoot.appendChild(sparkleLayer);
+  // Create the sparkle points
+  for (let i = 0; i < SPARKLE_COUNT; i++) {
+    let glowLayers = [];
+    // Create 10 circles for a soft glow
+    for (let j = 0; j < 10; j++) {
+      let glow = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "circle"
+      );
+      glow.setAttribute("fill", "#ffe923");
+      glow.setAttribute("opacity", "0");
+      sparkleLayer.appendChild(glow);
+      glowLayers.push(glow);
+    }
+    // Create the bright centre
+    let point = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "circle"
+    );
+    point.setAttribute("fill", "#ffb121");
+    point.setAttribute("opacity", "0");
+    sparkleLayer.appendChild(point);
+    // Store the sparkle information
+    sparkles.push({
+      glowLayers: glowLayers,
+      point: point,
+      active: false,
+      startFrame: 0,
+      duration: 0,
+      nextFrame: frameCount + floor(random(0, 60))
+    });
+  }
+}
+
+// Update sparkle positions and brightness every frame
+function updateSparkles() {
+  for (let i = 0; i < sparkles.length; i++) {
+    let sparkle = sparkles[i];
+    // Randomly start a new sparkle
+    if (!sparkle.active) {
+      if (frameCount >= sparkle.nextFrame) {
+        sparkle.active = true;
+        sparkle.nextFrame = frameCount + SPARKLE_REFRESH_FRAMES;
+        // Random position
+        let x = random(15, 870);
+        let y = random(20, 765);
+        // Random diameter between 3 and 8 pixels
+        let radius = random(2, 8);
+        // Duration is about 0.5 seconds
+        sparkle.duration = 60;
+        sparkle.startFrame = frameCount;
+        // Set the bright centre
+        sparkle.point.setAttribute("cx", "" + x);
+        sparkle.point.setAttribute("cy", "" + y);
+        sparkle.point.setAttribute("r", "" + radius);
+        // Set each glow circle
+        for (let j = 0; j < sparkle.glowLayers.length; j++) {
+          let glow = sparkle.glowLayers[j];
+          // Outer circles are larger
+          let scale = 3 - j * 0.2;
+          glow.setAttribute("cx", "" + x);
+          glow.setAttribute("cy", "" + y);
+          glow.setAttribute("r", "" + radius * scale);
+        }
+      }
+    }
+
+    // Update the active sparkle
+    if (sparkle.active) {
+      let progress = (frameCount - sparkle.startFrame) / sparkle.duration;
+      if (progress >= 1) {
+        // Hide the sparkle
+        sparkle.active = false;
+        sparkle.point.setAttribute("opacity", "0");
+        for (let j = 0; j < sparkle.glowLayers.length; j++) {
+          sparkle.glowLayers[j].setAttribute(
+            "opacity",
+            "0"
+          );
+        }
+      } else {
+        let brightness = 1;
+        if (progress < 0.1) {
+          brightness = map(progress, 0, 0.1, 0, 1);
+        } else if (progress > 0.9) {
+          brightness = map(progress, 0.9, 1, 1, 0);
+        }
+        // Bright centre
+        sparkle.point.setAttribute(
+          "opacity",
+          "" + brightness * 0.95
+        );
+        // The inner circles are more visible
+        // The outer circles are more transparent
+        for (let j = 0; j < sparkle.glowLayers.length; j++) {
+          let opacity = brightness * (0.02 + j * 0.009);
+          sparkle.glowLayers[j].setAttribute(
+            "opacity",
+            "" + opacity
+          );
+        }
+      }
+    }
+  }
+}
+
+
+
+// PERLIN NOISE MODULE
 let SWAY_MAX = 8;
 let SWAY_SPEED = 1.5;
-let SWAY_FADE_FRAMES = 20;
+let SWAY_FADE_FRAMES = 45;
 let LEAF_SWAY_FACTOR = 0.4;
 let swayAmplitude = SWAY_MAX;
-
 let stemRecords = {};
 let flowerWrappers = {};
 let leafWrappers = [];
@@ -83,59 +212,105 @@ function initializePerlinNoiseState(flower) {
 function setSwayAmplitude(degrees) {
   if (degrees >= 0) {
     swayAmplitude = degrees;
-    if (swayAmplitude > SWAY_MAX) swayAmplitude = SWAY_MAX;
+    if (swayAmplitude > SWAY_MAX) {
+      swayAmplitude = SWAY_MAX;
+    }
   }
 }
 
 function captureSway() {
-  stemRecords = {}; flowerWrappers = {}; leafWrappers = [];
-  smallFlowerWrappers = []; auxStates = {}; mainFlowerByStem = {};
+  stemRecords = {};
+  flowerWrappers = {};
+  leafWrappers = [];
+  smallFlowerWrappers = [];
+  auxStates = {};
+  mainFlowerByStem = {};
+
   for (let i = 0; i < sunflowers.length; i++) {
     let id = MAIN_STEM_BY_FLOWER[sunflowers[i].spec.id];
     mainFlowerByStem[id] = sunflowers[i];
   }
+
   for (let i = 0; i < visualStems.length; i++) {
     let id = "stem-" + visualStems[i][0];
-    let info = stemInfo[id], points = info.points;
-    let start = points[0], end = points[points.length - 1];
-    stemRecords[id] = { path: info.path, baseY: start[1], topY: end[1], offsetX: 0, offsetY: 0,
-      angle: 0, shakeOffset: random(0, 500) };
+    let info = stemInfo[id];
+    let points = info.points;
+    let start = points[0];
+    let end = points[points.length - 1];
+    stemRecords[id] = {
+      path: info.path,
+      baseY: start[1],
+      topY: end[1],
+      offsetX: 0,
+      offsetY: 0,
+      angle: 0,
+      shakeOffset: random(0, 500)
+    };
+
     if (!mainFlowerByStem[id]) {
       let red = isRedStem(id);
-      auxStates[id] = { noiseStart: random(20, 200), noiseSpeed: 0.072,
-        swayAngle: 0, swayY: 0, movementBlend: red ? 1 : 0,
-        movementStartFrame: red ? -1000 : null };
+      auxStates[id] = {
+        noiseStart: random(20, 200),
+        noiseSpeed: 0.072,
+        swayAngle: 0,
+        swayY: 0,
+        movementBlend: red ? 1 : 0,
+        movementStartFrame: red ? -1000 : null
+      };
     }
   }
+
   for (let i = 0; i < sunflowers.length; i++) {
     let id = sunflowers[i].spec.id;
-    flowerWrappers[id] = document.getElementById(id + '-sway-wrapper');
+    flowerWrappers[id] = document.getElementById(id + "-sway-wrapper");
   }
+
   for (let i = 0; i < currentLeaves.length; i++) {
-    leafWrappers[i] = document.getElementById('leaf-' + (i + 1) + '-sway-wrapper');
+    leafWrappers[i] = document.getElementById("leaf-" + (i + 1) + "-sway-wrapper");
   }
   for (let i = 0; i < visualSmallFlowers.length; i++) {
     let id = visualSmallFlowers[i][0];
-    smallFlowerWrappers[i] = document.getElementById(id + '-sway-wrapper');
+    smallFlowerWrappers[i] = document.getElementById(
+      id + "-sway-wrapper"
+    );
   }
+  // Create the white sparkles
+  setupSparkles();
 }
 
 function setWrapperTransform(wrapper, transform) {
-  if (wrapper) wrapper.setAttribute('transform', transform || 'translate(0 0)');
+  if (wrapper) {
+    wrapper.setAttribute(
+      "transform",
+      transform || "translate(0 0)"
+    );
+  }
 }
 
 function resetSway() {
   for (let i = 0; i < visualStems.length; i++) {
     let id = "stem-" + visualStems[i][0];
     let r = stemRecords[id];
-    r.offsetX = 0; r.offsetY = 0; r.angle = 0;
+    r.offsetX = 0;
+    r.offsetY = 0;
+    r.angle = 0;
     drawStem(id, stemProgress[id] || 0);
   }
+
   for (let i = 0; i < sunflowers.length; i++) {
-    setWrapperTransform(flowerWrappers[sunflowers[i].spec.id], '');
+    setWrapperTransform(
+      flowerWrappers[sunflowers[i].spec.id],
+      ""
+    );
   }
-  for (let i = 0; i < leafWrappers.length; i++) setWrapperTransform(leafWrappers[i], '');
-  for (let i = 0; i < smallFlowerWrappers.length; i++) setWrapperTransform(smallFlowerWrappers[i], '');
+
+  for (let i = 0; i < leafWrappers.length; i++) {
+    setWrapperTransform(leafWrappers[i], "");
+  }
+
+  for (let i = 0; i < smallFlowerWrappers.length; i++) {
+    setWrapperTransform(smallFlowerWrappers[i], "");
+  }
 }
 
 function updateSwayState(state, ready) {
@@ -146,8 +321,18 @@ function updateSwayState(state, ready) {
     state.movementStartFrame = null;
     return;
   }
-  if (state.movementStartFrame === null) state.movementStartFrame = frameCount;
-  state.movementBlend = constrain((frameCount - state.movementStartFrame) / SWAY_FADE_FRAMES, 0, 1);
+
+  if (state.movementStartFrame === null) {
+    state.movementStartFrame = frameCount;
+  }
+
+  state.movementBlend = constrain(
+    (frameCount - state.movementStartFrame) /
+      SWAY_FADE_FRAMES,
+    0,
+    1
+  );
+
   let frames = frameCount - state.movementStartFrame;
   let location = state.noiseStart + state.noiseSpeed * SWAY_SPEED * frames / 60;
   let fade = easeOutCubic(state.movementBlend);
@@ -158,12 +343,22 @@ function updateSwayState(state, ready) {
 function updateFlowers() {
   let seconds = frameCount / 60 * SWAY_SPEED;
   for (let i = 0; i < sunflowers.length; i++) {
-    updateSwayState(sunflowers[i], sunflowers[i].growthState === 'finished');
+    updateSwayState(
+      sunflowers[i],
+      sunflowers[i].growthState === "finished"
+    );
   }
+
   for (let i = 0; i < visualStems.length; i++) {
     let id = "stem-" + visualStems[i][0];
-    if (auxStates[id]) updateSwayState(auxStates[id], (stemProgress[id] || 0) >= 1);
+    if (auxStates[id]) {
+      updateSwayState(
+        auxStates[id],
+        (stemProgress[id] || 0) >= 1
+      );
+    }
   }
+
   for (let i = 0; i < visualStems.length; i++) {
     let id = "stem-" + visualStems[i][0];
     let r = stemRecords[id];
@@ -171,17 +366,27 @@ function updateFlowers() {
     let state = flower || auxStates[id];
     let swayAngle = state ? state.swayAngle : 0;
     let height = abs(r.baseY - r.topY);
-    if (isRedStem(id) && height < 100) height = 100;
-    let ordinary = getRegularMotion(flower, seconds, r.shakeOffset);
-    r.offsetX = height * sin(radians(swayAngle + ordinary.droopAngle * 0.55)) +
-      ordinary.shakeX + ordinary.inputX;
+
+    if (isRedStem(id) && height < 100) {
+      height = 100;
+    }
+
+    let ordinary = getRegularMotion(
+      flower,
+      seconds,
+      r.shakeOffset
+    );
+
+    r.offsetX = height * sin(radians(swayAngle + ordinary.droopAngle * 0.55)) + ordinary.shakeX + ordinary.inputX;
     r.offsetY = (state ? state.swayY : 0) + ordinary.ageingY + ordinary.inputY;
     r.angle = swayAngle + ordinary.droopAngle + ordinary.shakeAngle;
     drawStem(id, stemProgress[id] || 0);
   }
+
   swayFlowerHeads();
   swayLeaves(seconds);
   swaySmallFlowers();
+  updateSparkles();
 }
 
 function swayFlowerHeads() {
@@ -189,13 +394,15 @@ function swayFlowerHeads() {
     let f = sunflowers[i];
     let wrapper = flowerWrappers[f.spec.id];
     let record = stemRecords[MAIN_STEM_BY_FLOWER[f.spec.id]];
+
     if (record) {
-    let angle = record.angle;
-    let x = f.spec.x, y = f.spec.y;
-    let move = 'translate(' + formatNumber(record.offsetX) + ' ' + formatNumber(record.offsetY) + ')';
-    move += ' rotate(' + formatNumber(angle) + ' ' + x + ' ' + y + ')';
-    move += getInputTiltTransform(f);
-    setWrapperTransform(wrapper, move);
+      let angle = record.angle;
+      let x = f.spec.x;
+      let y = f.spec.y;
+      let move = "translate(" + formatNumber(record.offsetX) + " " + formatNumber(record.offsetY) + ")";
+      move += " rotate(" + formatNumber(angle) + " " + x + " " + y + ")";
+      move += getInputTiltTransform(f);
+      setWrapperTransform(wrapper, move);
     }
   }
 }
@@ -204,33 +411,39 @@ function swayLeaves(seconds) {
   for (let i = 0; i < currentLeaves.length; i++) {
     let wrapper = leafWrappers[i];
     let id = currentLeafProfiles[i][0];
+
     if (wrapper) {
-    if (id === 'pot') setWrapperTransform(wrapper, '');
-    else if (stemRecords[id]) {
-    let r = stemRecords[id];
-    let along = currentLeafProfiles[i][1];
-    let amount = along * along; // 与花杆使用的基础弯曲公式保持一致。
-    let offsetX = r.offsetX * amount;
-    let offsetY = r.offsetY * amount;
-    let state = mainFlowerByStem[id] || auxStates[id];
-    let blend = state ? state.movementBlend : 0;
-    let localAngle = (noise(50 + i * 5 + seconds * 0.11) - 0.5) *
-      2 * swayAmplitude * LEAF_SWAY_FACTOR * blend;
-    let leaf = currentLeaves[i];
-    let transform = 'translate(' + formatNumber(offsetX) + ' ' + formatNumber(offsetY) + ')';
-    transform += ' rotate(' + formatNumber(localAngle) + ' ' +
-      formatNumber(leaf[0]) + ' ' + formatNumber(leaf[1]) + ')';
-    setWrapperTransform(wrapper, transform);
-    }
+      if (id === "pot") {
+        setWrapperTransform(wrapper, "");
+
+      } else if (stemRecords[id]) {
+        let r = stemRecords[id];
+        let along = currentLeafProfiles[i][1];
+        let amount = along * along;
+        let offsetX = r.offsetX * amount;
+        let offsetY = r.offsetY * amount;
+        let state = mainFlowerByStem[id] || auxStates[id];
+        let blend = state ? state.movementBlend : 0;
+        let localAngle = (noise(50 + i * 5 + seconds * 0.11) - 0.5) * 2 * swayAmplitude * LEAF_SWAY_FACTOR * blend;
+        let leaf = currentLeaves[i];
+        let transform = "translate(" + formatNumber(offsetX) + " " + formatNumber(offsetY) + ")";
+        transform += " rotate(" + formatNumber(localAngle) + " " + formatNumber(leaf[0]) + " " + formatNumber(leaf[1]) + ")";
+        setWrapperTransform(wrapper, transform);
+      }
     }
   }
 }
 
 function swaySmallFlowers() {
   for (let i = 0; i < visualSmallFlowers.length; i++) {
-    let id = 'stem-red-0' + (i + 1);
+    let id = "stem-red-0" + (i + 1);
     let record = stemRecords[id];
-    if (record) setWrapperTransform(smallFlowerWrappers[i], 'translate(' + formatNumber(record.offsetX) +
-      ' ' + formatNumber(record.offsetY) + ')');
+
+    if (record) {
+      setWrapperTransform(
+        smallFlowerWrappers[i],
+        "translate(" + formatNumber(record.offsetX) + " " + formatNumber(record.offsetY) + ")"
+      );
+    }
   }
 }
