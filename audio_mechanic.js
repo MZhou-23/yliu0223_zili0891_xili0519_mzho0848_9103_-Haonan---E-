@@ -1,12 +1,12 @@
 // Part 1: Sound Settings
 
 let QUIET_SWAY_AMPLITUDE = 8; // Natural sway amplitude when no music is playing
-let AUDIO_THRESHOLD = 0.055; // Seeds may be released when the sound exceeds this value
+let AUDIO_THRESHOLD = 0.055; // Smoothed, amplified volume must cross this threshold upwards to trigger seeds
 let AUDIO_COOLDOWN_FRAMES = 42; // At least 42 frames between two seed releases
 let SWAY_EASE_FRAMES = 21; // The sway amplitude takes 21 frames to change
-let audioMode = "off"; // Current audio state
-let audioTrack = null; // Currently playing music
-let audioMic = null; // Currently active microphone
+let audioMode = "off"; // Audio mode: off, track, or mic
+let audioTrack = null; // Loaded or loading p5.SoundFile
+let audioMic = null; // Current p5.AudioIn instance, including while permission is pending
 let audioMeter; // Used to measure audio volume
 let audioTrackName = "Sunflower study"; // Music name
 // Current audio volume and volume from the previous frame
@@ -15,7 +15,7 @@ let audioPreviousVolume = 0;
 
 // Frame number of the last seed release
 let audioLastTriggerFrame = -100000;
-let audioArmed = true; // The sound must become quieter before another increase can trigger a release
+let audioArmed = true; // Re-arm below 60% of the threshold before another upward crossing can trigger seeds
 let audioSwayNow = QUIET_SWAY_AMPLITUDE; // Current sway amplitude
 let audioSwayFrom = QUIET_SWAY_AMPLITUDE; // Sway amplitude when the previous transition began
 let audioSwayChangeFrame = 0; // Frame number when the previous sway transition began
@@ -24,7 +24,7 @@ let audioRequest = 0; // Used to distinguish new and previous audio loading requ
 // Part 2: Seed Data
 
 let particleLayer; // SVG container for seed graphics
-let seedParticles = []; // Seeds that are flying or resting
+let seedParticles = []; // Active seeds moving along their flight paths
 let freeSeedElements = []; // Seed graphics that have disappeared and can be reused
 
 // Part 3: Initialise Audio Functions
@@ -36,25 +36,15 @@ function setupAudio() {
   svgRoot.appendChild(particleLayer);
   audioMeter = new p5.Amplitude(0); // Create an audio amplitude analyser
   document.getElementById("sound").addEventListener("click", playDefaultTrack);
-  // User selects their own audio file
-  document.getElementById("track-file").addEventListener("change", playChosenFile);
-  // Keep the microphone button without using an audio recording API not covered in class
+  // Connect the microphone button to the p5.sound input toggle
   document.getElementById("microphone").addEventListener("click", startMicrophone);
 }
 
 // Part 4: Play Music
 
 function playDefaultTrack() {
-  // Use a normal WAV file instead of Base64 decoding
+  // Play or stop the bundled WAV track
   playAudio("./assets/sunflower-study.wav","Sunflower study");
-}
-
-// Play the audio file selected by the user
-function playChosenFile(event) {
-  let file = event.target.files[0];
-  if (file) {
-    playAudio(file, file.name);
-  }
 }
 
 // Record the state when the sway amplitude starts changing
@@ -63,9 +53,9 @@ function startSwayEase() {
   audioSwayChangeFrame = frameCount;
 }
 
-// Stop the music
+// Stop the current source and reset volume, trigger and button states
 function stopAudio() {
-  // Cancel previous audio loading requests
+  // Ignore callbacks from earlier music loads by advancing the request counter
   audioRequest = audioRequest + 1;
   // Stop the music
   if (audioTrack) {
@@ -189,14 +179,14 @@ function updateAudio() {
   if (audioMode !== "off") {
     // Save the volume from the previous frame
     audioPreviousVolume = audioVolume;
-    // Read the current volume and smooth its changes slightly
+    // Measure the selected source before applying gain and smoothing
     // Read the current sound level
     let measuredVolume = audioMeter.getLevel();
-    // Adjust the level for music playback only
+    // Amplify the measured level for either music or microphone input
     if (audioMode !== "off") {
-      measuredVolume = measuredVolume / 0.3;
+      measuredVolume = measuredVolume * 3;
     }
-    // Smooth the volume changes
+    // Blend 35% of the previous value with 65% of the amplified reading
     audioVolume = audioVolume * 0.35 + measuredVolume * 0.65;
     // Allow another trigger when the sound becomes quieter again
     if (audioVolume < AUDIO_THRESHOLD * 0.6) {
@@ -204,7 +194,7 @@ function updateAudio() {
     }
     // Check whether the sound has just increased past the threshold
     let rising = audioVolume >= AUDIO_THRESHOLD && audioPreviousVolume < AUDIO_THRESHOLD;
-    // The sound meets the threshold and enough frames have passed
+    // Require an armed upward crossing and at least 42 frames since the last trigger
     if (audioArmed && rising && frameCount - audioLastTriggerFrame >= AUDIO_COOLDOWN_FRAMES) 
       {
       // Record the frame number of this seed release
@@ -215,7 +205,7 @@ function updateAudio() {
     }
   }
 
-  // Calculate the target sway amplitude of the flowers
+  // Music sets a volume-dependent sway target capped at 8; off and mic use the base target
   let swayGoal = QUIET_SWAY_AMPLITUDE;
   if (audioMode === "track") {
     swayGoal = 2.5 + audioVolume * 90;
@@ -243,7 +233,7 @@ function updateAudio() {
 
 function releaseSeeds(loudness) {
   // Determine the number of seeds from the volume
-  // Each mature flower releases 2 to 10 seeds at a time
+  // Request 2 to 10 seeds per mature flower, limited by its reserve and the scene cap
   let count = 2;
   for (let k = 1; k <= 8; k++) {
     if (loudness * 30 >= k) {
@@ -259,7 +249,7 @@ function releaseSeeds(loudness) {
       flower.mature &&
       flower.seedReserve > 0
     ) {
-      // Louder sound makes the flowers shake more strongly
+      // Set a shake impulse from the requested seed count, preserving any stronger existing shake
       let shake = 0.55 + count / 18;
       if (shake > 1) {
         shake = 1;
@@ -307,6 +297,17 @@ function releaseSeeds(loudness) {
           let vy = -30 - random() * 58;
           // Random starting rotation angle
           let startRotation = random() * 360;
+          // Set the initial transform for this new or reused SVG circle
+          element.setAttribute(
+            "transform",
+            "translate(" + visualF(startX) + " " +
+            visualF(flower.spec.y) + ") rotate(" +
+            visualF(startRotation) + ")"
+          );
+
+          // Ensure the seed remains visible after resetting its transform
+          element.setAttribute("visibility", "visible");
+
           // Store this seed in the array
           seedParticles.push({
             element: element,
@@ -320,7 +321,7 @@ function releaseSeeds(loudness) {
             vy: vy,
             // Record frameCount when the seed is created
             spawnFrame: frameCount,
-            // Record frameCount when the seed lands
+            // Reserved landing fields; the current flight update does not use them
             landFrame: 0,
             landed: false
           });
@@ -332,72 +333,50 @@ function releaseSeeds(loudness) {
 
 // Part 7: Update Seed Movement Every Frame
 
+
 function updateSeedParticles() {
-  // First loop: update seed position and rotation
-  for (let i = 0; i < seedParticles.length; i++) {
+
+  // Update each seed
+  for (let i = seedParticles.length - 1; i >= 0; i--) {
+
     let seed = seedParticles[i];
-    if (!seed.landed) {
-      let t = (frameCount - seed.spawnFrame) / 60;
 
-      // Move horizontally
-      seed.x = seed.startX + seed.vx * t;
+    // Convert elapsed frames to nominal seconds, assuming 60 frames per second
+    let t = (frameCount - seed.spawnFrame) / 60;
 
-      // Move vertically with a gravity effect
-      seed.y = seed.startY + seed.vy * t + 130 * t * t;
+    // Horizontal movement
+    seed.x = seed.startX + seed.vx * t;
 
-      // Keep rotating while flying
-      seed.rotation = seed.startRotation + 120 * t;
+    // Vertical movement with gravity
+    seed.y = seed.startY + seed.vy * t + 130 * t * t;
 
-      // Stop at the pot opening if the seed falls into the pot
-      if (
-        seed.y >= 570 &&
-        seed.x > 402 &&
-        seed.x < 483
-      ) {
-        seed.y = 570;
-        seed.landed = true;
-        seed.landFrame = frameCount;
-      }
-    }
-    // Move the SVG circle according to its position and angle
-    let move = "translate(" + visualF(seed.x) + " " + visualF(seed.y) + ")";
-    move = move + " rotate(" + visualF(seed.rotation) + ")";
+    // Rotation while falling
+    seed.rotation = seed.startRotation + 120 * t;
+
+    // Update SVG position
+    let move = "translate(" +
+      visualF(seed.x) + " " +
+      visualF(seed.y) + ")";
+
+    move = move + " rotate(" +
+      visualF(seed.rotation) + ")";
+
     seed.element.setAttribute("transform", move);
-  }
-  // Second loop: check which seeds should disappear
-  for (let i = seedParticles.length - 1;i >= 0;i--) 
-    {
-    let seed = seedParticles[i];
 
-    // By default, count time from the frame when the seed was created
-    let startFrame = seed.spawnFrame;
+    // Hide and recycle the seed when its y coordinate reaches 800
+    // or after 480 frames (8 seconds at 60 frames per second)
+    if (seed.y >= 800 || t >= 8) {
 
-    // If the seed has landed, count time from the landing frame
-    if (seed.landed) {
-      startFrame = seed.landFrame;
-    }
+      seed.element.setAttribute("visibility", "hidden");
 
-    let age = (frameCount - startFrame) / 60;
-
-    // Flying seeds remain for up to about 8 seconds
-    let keep = age < 8 && seed.y < 800;
-    if (seed.landed) {
-      // Landed seeds remain for about 4 seconds
-      keep = age < 4;
-      // Gradually fade during the last 1.5 seconds
-      let opacity = constrain((4 - age) / 1.5, 0,1);
-      seed.element.setAttribute("opacity","" + opacity);
-    }
-
-    // Seeds that need to disappear
-    if (!keep) {
-      // Hide the circle
-      seed.element.setAttribute("visibility","hidden");
+      // Reuse the SVG element later
       freeSeedElements.push(seed.element);
-      // Replace the current item with the last array item
-      seedParticles[i] = seedParticles[seedParticles.length - 1];
-      seedParticles.pop();
 
+      // Replace this entry with the last active seed, then shorten the array
+      seedParticles[i] =
+        seedParticles[seedParticles.length - 1];
+
+      seedParticles.pop();
     }
   }
 }
