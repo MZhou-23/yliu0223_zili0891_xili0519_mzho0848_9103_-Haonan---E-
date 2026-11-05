@@ -1,27 +1,10 @@
 // RANDOMNESS MODULE
-function randomChoice(options) {
-  return random(options);
-}
+// Selects appearance parameters when flowers are created and manages randomly appearing sparkles and butterflies.
 
-function randomBetween(a, b) {
-  return random(a, b);
-}
 
-// Give each flower or leaf a stable noise offset.
-function stableNoiseOffset(id) {
-  let name = "" + id;
-  let characters = "abcdefghijklmnopqrstuvwxyz0123456789-_";
-  let number = 7;
-  for (let i = 0; i < name.length; i++) {
-    for (let j = 0; j < characters.length; j++) {
-      if (name[i] === characters[j]) {
-        number = (number * 31 + j + 1) % 100000;
-      }
-    }
-  }
-  return 20 + number / 977;
-}
-
+// Sunflower class.
+// Input: spec contains the flower position and size settings; growthDelay is the growth delay in seconds.
+// Output: a Sunflower instance containing random appearance, initial Perlin noise values, and lifecycle state.
 class Sunflower {
   constructor(spec, growthDelay) {
     let a = sunflowerAppearanceOptions;
@@ -46,10 +29,12 @@ class Sunflower {
   }
 }
 
+// Creates and returns a new sunflower data object.
 function makeSunflower(spec, growthDelay) {
   return new Sunflower(spec, growthDelay);
 }
 
+// Generates a fixed appearance for every small red flower and stores the results in smallFlowerLooks.
 function createSmallFlowerLooks() {
   smallFlowerLooks = [];
   for (let i = 0; i < visualSmallFlowers.length; i++) {
@@ -62,17 +47,18 @@ function createSmallFlowerLooks() {
   }
 }
 
-// Maximum number of sparkle points
+// Maximum number of sparkle points.
 let SPARKLE_COUNT = 4;
-// Refresh each sparkle every 60 frames (about 1 second)
+// Refreshes sparkle points every 60 frames.
 let SPARKLE_REFRESH_FRAMES = 60;
-// SVG layer and sparkle data
+// Sparkle layer.
 let sparkleLayer = null;
+
 let sparkles = [];
 
-// Create the sparkle graphics
+
+// Creates the SVG sparkle layer and reusable circle nodes.
 function setupSparkles() {
-  // Only create the graphics once
   if (sparkleLayer !== null) {
     return;
   }
@@ -80,13 +66,19 @@ function setupSparkles() {
     "http://www.w3.org/2000/svg",
     "g"
   );
+
+  // Assigns attributes to the sparkle layer.
+  // Adds an accessible label to the sparkle layer.
   sparkleLayer.setAttribute("id", "orange-sparkles");
+  // Prevents the layer from receiving pointer events.
   sparkleLayer.setAttribute("pointer-events", "none");
+  // Appends the layer to the SVG canvas.
   svgRoot.appendChild(sparkleLayer);
-  // Create the sparkle points
+
+    // Creates one sparkle point.
   for (let i = 0; i < SPARKLE_COUNT; i++) {
     let glowLayers = [];
-    // Create 10 circles for a soft glow
+    // Glow circle.
     for (let j = 0; j < 10; j++) {
       let glow = document.createElementNS(
         "http://www.w3.org/2000/svg",
@@ -97,7 +89,7 @@ function setupSparkles() {
       sparkleLayer.appendChild(glow);
       glowLayers.push(glow);
     }
-    // Create the bright centre
+    // Bright centre circle.
     let point = document.createElementNS(
       "http://www.w3.org/2000/svg",
       "circle"
@@ -105,7 +97,7 @@ function setupSparkles() {
     point.setAttribute("fill", "#ffb121");
     point.setAttribute("opacity", "0");
     sparkleLayer.appendChild(point);
-    // Store the sparkle information
+    // Stores the centre circle and glow together in the sparkles array.
     sparkles.push({
       glowLayers: glowLayers,
       point: point,
@@ -117,31 +109,27 @@ function setupSparkles() {
   }
 }
 
-// Update sparkle positions and brightness every frame
+// Updates all sparkle points once per frame.
 function updateSparkles() {
   for (let i = 0; i < sparkles.length; i++) {
     let sparkle = sparkles[i];
-    // Randomly start a new sparkle
+    // Starts a new random sparkle when its scheduled frame is reached.
     if (!sparkle.active) {
       if (frameCount >= sparkle.nextFrame) {
         sparkle.active = true;
         sparkle.nextFrame = frameCount + SPARKLE_REFRESH_FRAMES;
-        // Random position
+        // Randomly selects the sparkle position.
         let x = random(15, 870);
         let y = random(20, 765);
-        // Random diameter between 3 and 8 pixels
+        // Randomly selects the radius; Codex assisted with tuning these values.
         let radius = random(2, 8);
-        // Duration is about 0.5 seconds
         sparkle.duration = 60;
         sparkle.startFrame = frameCount;
-        // Set the bright centre
         sparkle.point.setAttribute("cx", "" + x);
         sparkle.point.setAttribute("cy", "" + y);
         sparkle.point.setAttribute("r", "" + radius);
-        // Set each glow circle
         for (let j = 0; j < sparkle.glowLayers.length; j++) {
           let glow = sparkle.glowLayers[j];
-          // Outer circles are larger
           let scale = 3 - j * 0.2;
           glow.setAttribute("cx", "" + x);
           glow.setAttribute("cy", "" + y);
@@ -150,11 +138,11 @@ function updateSparkles() {
       }
     }
 
-    // Update the active sparkle
+    // Updates sparkle points that are currently visible.
     if (sparkle.active) {
       let progress = (frameCount - sparkle.startFrame) / sparkle.duration;
       if (progress >= 1) {
-        // Hide the sparkle
+        // Hides a sparkle after its animation ends.
         sparkle.active = false;
         sparkle.point.setAttribute("opacity", "0");
         for (let j = 0; j < sparkle.glowLayers.length; j++) {
@@ -170,13 +158,12 @@ function updateSparkles() {
         } else if (progress > 0.9) {
           brightness = map(progress, 0.9, 1, 1, 0);
         }
-        // Bright centre
+        // Updates the opacity of the bright centre.
         sparkle.point.setAttribute(
           "opacity",
           "" + brightness * 0.95
         );
-        // The inner circles are more visible
-        // The outer circles are more transparent
+        // Keeps the inner circle brighter and the outer circle more transparent to create a soft glow.
         for (let j = 0; j < sparkle.glowLayers.length; j++) {
           let opacity = brightness * (0.02 + j * 0.009);
           sparkle.glowLayers[j].setAttribute(
@@ -190,12 +177,98 @@ function updateSparkles() {
 }
 
 
+// Butterfly randomness.
+let BUTTERFLY_WAIT_MIN = 0;
+let BUTTERFLY_WAIT_MAX = 60;
+let BUTTERFLY_HOLD_FRAMES = 60;
+let butterflyLayer = null;
+let activeButterfly = null;
+let nextButterflyFrame = 0;
+
+// Butterfly layer.
+function setupButterflies() {
+  butterflyLayer = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "g"
+  );
+  // Assigns attributes to the butterfly layer.
+  // Adds an accessible label to the butterfly layer.
+  butterflyLayer.setAttribute("id", "butterfly-layer");
+    // Prevents the layer from receiving pointer events.
+  butterflyLayer.setAttribute("pointer-events", "none");
+    // Appends the layer to the SVG canvas.
+  svgRoot.appendChild(butterflyLayer);
+
+  nextButterflyFrame = frameCount + floor(random(BUTTERFLY_WAIT_MIN, BUTTERFLY_WAIT_MAX));
+}
+
+// Randomly creates one butterfly.
+function createRandomButterfly() {
+  // Randomly selects one of the three butterfly images.
+  let selectedImage = random(butterflyImages);
+  // Randomly selects the butterfly size.
+  let size = random(75, 120);
+  // Randomly selects a position within the canvas.
+  let x = random(80, W - 80 - size);
+  let y = random(90, H - 200 - size);
+
+  let butterfly = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "image"
+  );
+
+  butterfly.setAttribute("href", selectedImage);
+  butterfly.setAttribute("x", x);
+  butterfly.setAttribute("y", y);
+  butterfly.setAttribute("width", size);
+  butterfly.setAttribute("height", size);
+  butterfly.setAttribute("opacity", 1);
+  butterfly.setAttribute(
+    "preserveAspectRatio",
+    "xMidYMid meet"
+  );
+
+  butterflyLayer.appendChild(butterfly);
+
+  activeButterfly = {
+    element: butterfly,
+    startFrame: frameCount
+  };
+}
+
+// Manages the butterfly lifecycle.
+function updateButterflies() {
+  // When no butterfly is visible, waits for the scheduled appearance frame.
+  if (activeButterfly === null) {
+    if (frameCount >= nextButterflyFrame) {
+      createRandomButterfly();
+    }
+    return;
+  }
+  let elapsed = frameCount - activeButterfly.startFrame;
+  // Removes the current butterfly after it has been visible for one second.
+  if (elapsed >= BUTTERFLY_HOLD_FRAMES) {
+    activeButterfly.element.remove();
+    activeButterfly = null;
+    // Generates a random waiting time for the next butterfly.
+    nextButterflyFrame = frameCount +
+      floor(random(BUTTERFLY_WAIT_MIN, BUTTERFLY_WAIT_MAX));
+  }
+}
+
 
 // PERLIN NOISE MODULE
+// Converts continuous noise into subtle natural swaying for stems, flower heads, leaves, and small flowers.
+
+// Sway amplitude.
 let SWAY_MAX = 8;
+// Sway speed.
 let SWAY_SPEED = 1.5;
+// Initial sway angle.
 let SWAY_FADE_FRAMES = 45;
+// Leaf sway amplitude relative to the main sway amplitude.
 let LEAF_SWAY_FACTOR = 0.4;
+
 let swayAmplitude = SWAY_MAX;
 let stemRecords = {};
 let flowerWrappers = {};
@@ -204,11 +277,25 @@ let smallFlowerWrappers = [];
 let auxStates = {};
 let mainFlowerByStem = {};
 
+
+// Calculates a stable offset from an object ID; Codex assisted with this function.
+function stableNoiseOffset(id) {
+  let name = "" + id;
+  let number = 7;
+  for (let i = 0; i < name.length; i++) {
+  number = (number * 31 + name.charCodeAt(i)) % 100000;
+  }
+  return 20 + number / 977;
+}
+
+
+// Writes independent Perlin noise values to one flower.
 function initializePerlinNoiseState(flower) {
   flower.noiseStart = random(20, 200);
   flower.noiseSpeed = 0.08;
 }
 
+// Sets the maximum currently allowed sway angle.
 function setSwayAmplitude(degrees) {
   if (degrees >= 0) {
     swayAmplitude = degrees;
@@ -218,6 +305,7 @@ function setSwayAmplitude(degrees) {
   }
 }
 
+// Collects all stems and SVG wrapper nodes; Codex assisted with this function.
 function captureSway() {
   stemRecords = {};
   flowerWrappers = {};
@@ -274,10 +362,15 @@ function captureSway() {
       id + "-sway-wrapper"
     );
   }
-  // Create the white sparkles
+  // Creates the random sparkle layer.
   setupSparkles();
+  // Initialises the random butterfly layer.
+  setupButterflies();
 }
 
+// Sets a transform on the specified SVG wrapper node.
+// Input: wrapper is an SVG element; transform is a transform string.
+// Output: updates the node's transform attribute; an empty value restores translate(0 0).
 function setWrapperTransform(wrapper, transform) {
   if (wrapper) {
     wrapper.setAttribute(
@@ -287,6 +380,7 @@ function setWrapperTransform(wrapper, transform) {
   }
 }
 
+// Restores all sway translations and rotations to their initial state.
 function resetSway() {
   for (let i = 0; i < visualStems.length; i++) {
     let id = "stem-" + visualStems[i][0];
@@ -313,6 +407,7 @@ function resetSway() {
   }
 }
 
+// Calculates the continuous noise-driven sway state of one object for the current frame.
 function updateSwayState(state, ready) {
   if (!ready) {
     state.swayAngle = 0;
@@ -340,6 +435,7 @@ function updateSwayState(state, ready) {
   state.swayY = (noise(location + 80) - 0.5) * 6 * fade;
 }
 
+// Updates every animated element once per frame.
 function updateFlowers() {
   let seconds = frameCount / 60 * SWAY_SPEED;
   for (let i = 0; i < sunflowers.length; i++) {
@@ -387,8 +483,10 @@ function updateFlowers() {
   swayLeaves(seconds);
   swaySmallFlowers();
   updateSparkles();
+  updateButterflies();
 }
-
+// Element binding.
+// Applies each stem's translation and angle to its corresponding main sunflower head.
 function swayFlowerHeads() {
   for (let i = 0; i < sunflowers.length; i++) {
     let f = sunflowers[i];
@@ -407,6 +505,7 @@ function swayFlowerHeads() {
   }
 }
 
+// Makes leaves follow their stems and adds a smaller local noise rotation.
 function swayLeaves(seconds) {
   for (let i = 0; i < currentLeaves.length; i++) {
     let wrapper = leafWrappers[i];
@@ -434,6 +533,7 @@ function swayLeaves(seconds) {
   }
 }
 
+// Makes the nine small red flowers follow the tops of their respective stems.
 function swaySmallFlowers() {
   for (let i = 0; i < visualSmallFlowers.length; i++) {
     let id = "stem-red-0" + (i + 1);

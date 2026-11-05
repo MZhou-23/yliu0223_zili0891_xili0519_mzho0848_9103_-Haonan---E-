@@ -7,103 +7,104 @@
   <title>Sunflowers</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
-  <style>
-  /* I keep the whole page inside one screen: the page never scrolls, the artwork shrinks to fit.
-     Raise --header-height or --footer-height to give the top or bottom bar more room (the artwork gets smaller). */
-  :root {
-    --sky: #f6eedd;
-    --ink: #5a4634;
-    --soft: #5a463499;           /* softer ink for small text. Add digits to the end (e.g. 55) to make it fainter. */
-    --line: #5a463433;           /* thin outlines of the buttons */
-    --accent: #c98a2b;           /* the gold of the small diamonds and the sound level bar */
-    --chip: #ffffff55;           /* the milky fill behind the buttons */
-    --header-height: 64px;
-    --footer-height: 96px;
-    color-scheme: light;
-  }
-  html[data-phase="night"] { --ink: #f4e7ce; --soft: #f4e7cec2; --line: #f4e7ce44; --chip: #ffffff14; --accent: #ffd56b; }
-
-  * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; overflow: hidden; }
-  body { min-width: 320px; background: var(--sky); color: var(--ink); font-family: "Avenir Next", "Segoe UI", Helvetica, Arial, sans-serif; }
-
-  /* Three rows: header, artwork (takes all the space that is left), footer. */
-  main { display: grid; grid-template-rows: var(--header-height) minmax(0, 1fr) var(--footer-height); height: 100dvh; padding: 0 clamp(14px, 3vw, 36px); }
-
-  /* Header: serif title on the left, a small day pill on the right. No ruled lines. */
-  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .brand { min-width: 0; }
-  .title { font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif; font-size: 24px; font-style: italic; letter-spacing: .02em; }
-  .phase { display: flex; align-items: center; gap: 10px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--chip); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
-  #day { color: var(--soft); }
-  #day::before { content: ""; display: inline-block; width: 5px; height: 5px; margin-right: 10px; vertical-align: middle; background: var(--accent); transform: rotate(45deg); }
-
-  /* Artwork: as big as the middle row allows, always keeping the 885 x 785 shape, centred. */
-  #artwork-shell { position: relative; justify-self: center; align-self: center; height: 100%; width: auto; max-width: 100%; aspect-ratio: 885 / 785; overflow: visible; transform: translateY(-4%); }
-  /* overflow: visible lets the pot shadow below the picture show; translateY(-4%) lifts the whole picture up so the shadow has room. Make -4% bigger (e.g. -6%) to lift it more. */
-  #artwork, #artwork > svg { display: block; width: 100%; height: 100%; }
-  #artwork > svg { overflow: visible; }
-  #sun { position: absolute; left: 82%; top: 14%; z-index: 5; width: clamp(40px, 6vw, 68px); aspect-ratio: 1; transform: translate(-50%, -50%); border: 0; border-radius: 50%; padding: 0; pointer-events: none; background: radial-gradient(circle at 35% 30%, #fff2a8 0 10%, #ffd363 38%, #e6952f 76%, #c97828 100%); box-shadow: 0 0 0 10px #ffd56b1f, 0 0 38px 20px #ffd56b38; }
-
-  /* Footer: one caption, then the audio buttons. */
-  footer { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
-  #notice { min-height: 18px; margin: 0; text-align: center; font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif; font-size: 15px; font-style: italic; }
-
-  .buttons { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--chip); }
-  button, .file-button { position: relative; display: inline-block; border: 0; border-radius: 999px; padding: 7px 16px; background: transparent; color: inherit; font: inherit; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; cursor: pointer; transition: none; }
-  button:hover, .file-button:hover { background: var(--ink); color: var(--sky); }
-  button:focus-visible, .file-button:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .file-button { overflow: hidden; }
-  .file-button input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
-  /* The level bar sits right after the audio buttons. margin-right = the gap before the divider line. */
-  .level { width: 40px; height: 4px; margin: 0 12px 0 6px; overflow: hidden; border-radius: 4px; background: var(--line); }
-  /* A thin line between the sound controls and the Save image button. */
-  .divider { width: 1px; height: 16px; margin: 0 6px; background: var(--line); }
-  #audio-level { display: block; width: 0; height: 100%; background: var(--accent); }
-
-  #input-weather-layer { position: absolute; inset: 0; z-index: 4; display: block; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-  .input-rain-drop { vector-effect: non-scaling-stroke; }
-
-  /* Small screens: smaller title, no day pill, a slightly shorter footer. */
-  @media (max-width: 650px) {
-    :root { --header-height: 52px; --footer-height: 120px; }
-    .title { font-size: 20px; }
-    #day { display: none; }
-    #notice { font-size: 13px; }
-    button, .file-button { padding: 7px 12px; }
-  }
-  </style>
-  <script src="libraries/p5.min.js"></script>
-  <script src="libraries/p5.sound.min.js"></script>
+  <!-- p5.js core library and sound library module. -->
+  <script src="./libraries/p5.min.js"></script>
+  <script src="./libraries/p5.sound.min.js"></script>
 </head>
 <body>
-  <!-- One screen, no scrolling: title row on top, artwork in the middle, controls at the bottom. -->
+  <!-- Main page layout module. -->
   <main>
+    <!-- Status display module. -->
     <header>
       <div class="brand">
         <span class="title">Sunflowers</span>
+        <p id="notice" role="status">Click once to show the watering can, click again to pour water, and drag the sun to move it.</p>
       </div>
       <div class="phase"><span id="phase">Dawn</span><span id="day">DAY 01</span></div>
     </header>
+    <!-- Artwork container module. -->
     <section id="artwork-shell" aria-label="Interactive sunflower artwork">
+      <!-- Audio feedback module: audio_mechanic.js receives the real-time volume level and changes the width of audio-level. -->
+      <span class="level" aria-label="Audio level">
+      <span id="audio-level"></span>
+      </span>
       <div id="artwork"></div>
-      <button id="sun" type="button" aria-label="The sun"></button>
+      <!-- Sun and moon interaction module. -->
+      <button id="sun" type="button" aria-label="The sun and the moon">
+        <svg viewBox="-50 -50 100 100" aria-hidden="true">
+          <defs>
+            <radialGradient id="sun-halo-fill">
+              <stop offset="50%" stop-color="#FFD56B" stop-opacity="0.4"/>
+              <stop offset="100%" stop-color="#FFD56B" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="moon-halo-fill">
+              <stop offset="50%" stop-color="#E4E9FF" stop-opacity="0.3"/>
+              <stop offset="100%" stop-color="#E4E9FF" stop-opacity="0"/>
+            </radialGradient>
+            <mask id="moon-shape" maskUnits="userSpaceOnUse" x="-50" y="-50" width="100" height="100">
+              <circle r="28" fill="white"/>
+              <circle cx="13" cy="-8" r="24" fill="black"/>
+            </mask>
+          </defs>
+
+          <!-- Celestial graphic module. -->
+          <g id="sun-body">
+            <circle r="48" fill="url(#sun-halo-fill)"/>
+            <g id="sun-rays" stroke="#F4B23C" stroke-width="3.2" stroke-linecap="round">
+              <line x1="0" y1="-37" x2="0" y2="-46"/>
+              <line x1="0" y1="-37" x2="0" y2="-46" transform="rotate(30)"/>
+              <line x1="0" y1="-37" x2="0" y2="-46" transform="rotate(60)"/>
+              <line x1="0" y1="-37" x2="0" y2="-46" transform="rotate(90)"/>
+              <line x1="0" y1="-37" x2="0" y2="-46" transform="rotate(120)"/>
+              <line x1="0" y1="-37" x2="0" y2="-46" transform="rotate(150)"/>
+              <line x1="0" y1="-37" x2="0" y2="-46" transform="rotate(180)"/>
+              <line x1="0" y1="-37" x2="0" y2="-46" transform="rotate(210)"/>
+              <line x1="0" y1="-37" x2="0" y2="-46" transform="rotate(240)"/>
+              <line x1="0" y1="-37" x2="0" y2="-46" transform="rotate(270)"/>
+              <line x1="0" y1="-37" x2="0" y2="-46" transform="rotate(300)"/>
+              <line x1="0" y1="-37" x2="0" y2="-46" transform="rotate(330)"/>
+            </g>
+            <circle r="28" fill="#F8BE45"/>
+            <circle r="28" fill="none" stroke="#FFE08A" stroke-width="3" opacity="0.7"/>
+          </g>
+
+          <g id="moon-body">
+            <circle r="48" fill="url(#moon-halo-fill)"/>
+            <g id="moon-dots" fill="#F6F0D8">
+              <circle cy="-41" r="1.8"/>
+              <circle cy="-41" r="1.8" transform="rotate(30)"/>
+              <circle cy="-41" r="1.8" transform="rotate(60)"/>
+              <circle cy="-41" r="1.8" transform="rotate(90)"/>
+              <circle cy="-41" r="1.8" transform="rotate(120)"/>
+              <circle cy="-41" r="1.8" transform="rotate(150)"/>
+              <circle cy="-41" r="1.8" transform="rotate(180)"/>
+              <circle cy="-41" r="1.8" transform="rotate(210)"/>
+              <circle cy="-41" r="1.8" transform="rotate(240)"/>
+              <circle cy="-41" r="1.8" transform="rotate(270)"/>
+              <circle cy="-41" r="1.8" transform="rotate(300)"/>
+              <circle cy="-41" r="1.8" transform="rotate(330)"/>
+            </g>
+            <g mask="url(#moon-shape)">
+              <circle r="28" fill="#F6F0D8"/>
+              <circle cx="-15" cy="7" r="3.6" fill="#DAD6BC"/>
+              <circle cx="-9" cy="18" r="2.3" fill="#DAD6BC"/>
+              <circle cx="-21" cy="-4" r="2.1" fill="#DAD6BC"/>
+            </g>
+            <circle r="28" fill="none" stroke="#FFFFFF" stroke-width="3" opacity="0.35" mask="url(#moon-shape)"/>
+          </g>
+        </svg>
+      </button>
     </section>
+    <!-- Audio control module. -->
     <footer>
-      <p id="notice" role="status">Click the artwork for a cloud, then scroll for rain.</p>
+      
       <div class="buttons">
         <button id="sound" type="button">Play music</button>
-        <label class="file-button" for="track-file">Choose audio<input id="track-file" type="file" accept="audio/*"></label>
         <button id="microphone" type="button">Microphone</button>
-        <span class="level" aria-label="Audio level"><span id="audio-level"></span></span>
-        <span class="divider" aria-hidden="true"></span>
-        <button id="save" type="button">Save image</button>
       </div>
     </footer>
   </main>
-  <noscript>Please enable JavaScript to view this artwork.</noscript>
-
-  <script src="assets/default-audio.js"></script>
+  <!-- Script integration module. -->
   <script src="perlin_randomness.js"></script>
   <script src="time_mechanic.js"></script>
   <script src="input_mechanic.js"></script>

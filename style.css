@@ -1,3 +1,5 @@
+/* The following code was designed by our group with assistance from Codex. */
+
 html, body {
   margin: 0;
   padding: 0;
@@ -5,4 +7,260 @@ html, body {
 
 canvas {
   display: block;
+}
+
+:root {
+  --sky: #f6eedd;
+  --ink: #5a4634;
+  --soft: #5a463499;           /* Soft text colour for small labels; the final alpha value can be adjusted. */
+  --line: #5a463433;           /* Thin border colour used by buttons and controls. */
+  --accent: #c98a2b;           /* Gold accent colour used by the small diamond and volume bar. */
+  --chip: #ffffff55;           /* Translucent cream colour behind button containers. */
+  --header-height: 64px;
+  --footer-height: 96px;
+  color-scheme: light;
+}
+
+html[data-phase="night"] {
+  --ink: #f4e7ce;
+  --soft: #f4e7cec2;
+  --line: #f4e7ce44;
+  --chip: #ffffff14;
+  --accent: #ffd56b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  min-width: 320px;
+  background: var(--sky);
+  color: var(--ink);
+  font-family: "Avenir Next", "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+/* The page is divided into three rows: a top heading, a responsive central artwork area, and a bottom control area. */
+main {
+  display: grid;
+  grid-template-rows: var(--header-height) minmax(0, 1fr) var(--footer-height);
+  height: 100dvh;
+  padding: 0 clamp(14px, 3vw, 36px);
+}
+
+/* Top area: a serif heading on the left and a date/time-phase pill on the right. */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brand {
+  min-width: 0;
+}
+
+.title {
+  font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  font-size: 24px;
+  font-style: italic;
+  letter-spacing: .02em;
+}
+
+.phase {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--chip);
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+#day {
+  color: var(--soft);
+}
+
+#day::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 10px;
+  vertical-align: middle;
+  background: var(--accent);
+  transform: rotate(45deg);
+}
+
+/* Artwork area: scales as large as possible within the middle row while preserving the 885 × 785 ratio and remaining centred. */
+#artwork-shell {
+  position: relative;
+  justify-self: center;
+  align-self: center;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  aspect-ratio: 885 / 785;
+  overflow: visible;
+  transform: translateY(-4%);
+}
+
+/* Allows overflow to display the shadow below the pot and moves the artwork upward by 4% to leave room for that shadow. */
+#artwork,
+#artwork > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#artwork > svg {
+  overflow: visible;
+}
+
+/* The sun and moon share the upper-right position; the inner SVG is centred and the button size controls the overall display size. */
+#sun {
+  position: absolute;
+  left: 82%;
+  top: 14%;
+  z-index: 5;
+  width: clamp(64px, 8.5vw, 96px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+#sun svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Bottom area: contains the instruction text and audio control buttons. */
+footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+#notice {
+  min-height: 18px;
+  margin: 0;
+  text-align: center;
+  font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  font-size: 15px;
+  font-style: italic;
+}
+
+.buttons {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--chip);
+}
+
+button {
+  position: relative;
+  display: inline-block;
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 16px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: none;
+}
+
+button:hover {
+  background: var(--ink);
+  color: var(--sky);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The volume indicator sits directly below the artwork. */
+.level {
+  position: absolute;
+  top: 102%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 6px;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--line);
+  pointer-events: none;
+  z-index: 6;
+}
+
+#audio-level {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+}
+
+#input-weather-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* Small-screen layout: reduces the heading size, hides the date, and adjusts the height of the bottom area. */
+@media (max-width: 650px) {
+  :root {
+    --header-height: 52px;
+    --footer-height: 120px;
+  }
+
+  .title {
+    font-size: 20px;
+  }
+
+  #day {
+    display: none;
+  }
+
+  #notice {
+    font-size: 13px;
+  }
+
+  button {
+    padding: 7px 12px;
+  }
 }

@@ -1,4 +1,7 @@
-// 1. PRESET ARRAYS 
+// PRESET DATA MODULE
+// This section stores fixed parameters for flowers, stems, leaves, the pot, and butterflies for later generation functions.
+// Codex assisted us in confirming practical parameter values that achieve the intended visual result.
+// Codex also assisted us in resolving gaps in the code logic so the project runs correctly.
 let sunflowerAppearanceOptions = {
   row0PetalCounts: [7, 8, 9],
   row1PetalCounts: [7, 8, 9],
@@ -9,11 +12,11 @@ let sunflowerAppearanceOptions = {
   sunflowerCenterBaseColors: ["#AF7F4D", "#BA6A17"],
   sunflowerCenterMiddleColors: ["#AFBD71"],
   smallRedFlowerPetalColors: ["#EA5D59", "#FF885C", "#D85C23", "#FF582C"],
-  // Small changes from the original width/length ratio; every selected value is used.
+  // Petal aspect ratios vary within a small range close to the reference image, and every selected value is used in rendering.
   petalAspectRatios: [2.2, 2.35, 2.47],
   petalLengthScales: [0.98, 1, 1.02],
   petalOffsetOptions: [0, 0.08, 0.16],
-  // Seed colours and inner centre are used by renderSunflower.
+  // Seed colours and inner-disc colours are read by renderSunflower.
   centerDesigns: [
     { greenInner: "#8CAA4A", dot: "#5A2E12" },
     { greenInner: "#89A44A", dot: "#633314" }
@@ -195,7 +198,14 @@ let STEM_GREEN = "#68A07C";
 let W = 885;
 let H = 785;
 
-// Original pot appearance and smooth outline
+// Three butterfly images available for random selection.
+let butterflyImages = [
+  "./assets/butterfly-1.png",
+  "./assets/butterfly-2.png",
+  "./assets/butterfly-3.png"
+];
+
+// Base pot colours and coordinate ratios used to smooth its outline.
 let potAppearanceOptions = [{
   bodyColor: "#F8DE9A", rimColor: "#F0C664", lineColor: "#D9A024", shadowColor: "#BE821E",
   sidePoints: [
@@ -204,10 +214,14 @@ let potAppearanceOptions = [{
   ]
 }];
 
+// Removes unnecessary numerical precision from SVG paths.
 function round2(value) {
   return round(value * 100) / 100;
 }
 
+// Converts a closed set of contour points into a smooth SVG Bezier path.
+// Input: points, an array of two-dimensional coordinates ordered around the contour.
+// Output: a closed SVG path string composed of M, C, and Z commands.
 function closedCurvePath(points) {
   let count = points.length;
   let path = "M " + round2(points[0][0]) + " " + round2(points[0][1]);
@@ -251,21 +265,27 @@ let currentLeafProfiles = [];
 let currentLeafAngles = [];
 let smallFlowerLooks = [];
 
-// V7 team feature: small red flowers appear on the first watering, then remain.
+// Small red flowers grow after the first watering and remain visible afterwards.
 let redGrown = false;
 
+// Calculates an interpolation ratio with a smooth start and end.
 function easeInOutCubic(value) {
   let t = constrain(value, 0, 1);
   return t * t * (3 - 2 * t);
 }
+
+// Calculates an interpolation ratio with a fast start and slow finish.
 function easeOutCubic(value) {
   let t = constrain(value, 0, 1);
   return lerp(t, 1, t);
 }
+
+// Formats a number as a string with at most two decimal places for use in SVG attributes.
 function formatNumber(value) {
   return "" + (round(value * 100) / 100);
 }
 
+// Maps a value within a specified interval to a cosine-smoothed progress value.
 function smoothRange(start, end, value) {
   let distance = end - start;
   if (distance < 0.0001) distance = 0.0001;
@@ -273,11 +293,13 @@ function smoothRange(start, end, value) {
   return (1 - cos(radians(t * 180))) / 2;
 }
 
-// V7 lifecycle compatibility; initializing a new flower also resets its growth.
+// The lifecycle module uses this entry point to initialise a new flower and reset its growth state.
+// Sets the initial lifecycle state for a newly created or updated flower.
 function setStartingLife(flower) {
   initializeFlowerState(flower);
 }
 
+// Writes all initial fields required for flower interaction, seeds, ageing, growth, and rebirth.
 function initializeFlowerState(flower) {
   flower.inputOffsetX = 0;
   flower.inputOffsetY = 0;
@@ -297,15 +319,20 @@ function initializeFlowerState(flower) {
   resetFlowerGrowth(flower);
 }
 
+// Converts a number into SVG text with at most two decimal places.
 function visualF(value) { return String(round(value * 100) / 100); }
+// Combines two-dimensional coordinates into text suitable for an SVG attribute.
 function visualXY(x, y) { return visualF(x) + " " + visualF(y); }
+// Generates the markup for one complete SVG circle node.
 function svgCircle(id, x, y, radius, fill) {
   return '<circle id="' + id + '" cx="' + visualF(x) + '" cy="' + visualF(y) +
     '" r="' + visualF(radius) + '" fill="' + fill + '"/>';
 }
+// Calculates the position of a specified angle on a circle.
 function visualRingPoint(orbit, angle) {
   return [orbit * cos(radians(angle)), orbit * sin(radians(angle))];
 }
+// Generates a ring of seed dots arranged around the flower centre.
 function ringOfDots(id, orbit, dotRadius, step, color, offset) {
   let result = "";
   for (let a = 0; a < 360; a += step) {
@@ -314,6 +341,7 @@ function ringOfDots(id, orbit, dotRadius, step, color, offset) {
   }
   return result;
 }
+// Converts a coordinate array into an SVG path joined by straight lines.
 function linePath(points) {
   let result = '';
   for (let i = 0; i < points.length; i++) {
@@ -321,7 +349,7 @@ function linePath(points) {
   }
   return result;
 }
-
+// Generates one complete ring of elliptical sunflower petals.
 function stripedPetalRing(id, count, radius, row, color, flower) {
   let start = radius * 50 / 95;
   let tipOptions = [235 / 95, 220 / 95, 205 / 95];
@@ -342,6 +370,7 @@ function stripedPetalRing(id, count, radius, row, color, flower) {
   }
   return result;
 }
+// Generates a complete layered sunflower SVG from a flower object.
 function renderSunflower(flower) {
   let id = flower.spec.id;
   let r = flower.spec.discRadius;
@@ -359,12 +388,14 @@ function renderSunflower(flower) {
   return text + '</g>';
 }
 
-// Main SVG needs the outer sway wrapper; time_mechanic.js replaces only the inner flower.
+// The main SVG keeps an outer sway wrapper so the time module replaces only the inner flower during rebirth.
+// Adds an outer group dedicated to carrying sway transforms for a main sunflower.
 function renderSunflowerWithSway(flower) {
   return '<g id="' + flower.spec.id + '-sway-wrapper">' + renderSunflower(flower) + '</g>';
 }
 
-// 4. SMALL RED FLOWERS. Chosen random appearance is passed IN from perlin_randomness.js.
+// Small red flowers use appearance data preselected by the Perlin noise and randomness module.
+// Generates the SVG for a small red flower and its sway wrapper.
 function smallFlowerSVGText(id, x, y, size, flowerLook) {
   let a = flowerLook.shape;
   let text = '<g id="' + id + '-sway-wrapper"><g id="' + id +
@@ -381,6 +412,7 @@ function smallFlowerSVGText(id, x, y, size, flowerLook) {
   return text + '</g></g>';
 }
 
+// Converts the current leaf data into SVG with separate lifecycle and sway wrapper layers.
 function renderLeaves() {
   let result = '';
   for (let i = 0; i < currentLeaves.length; i++) {
@@ -405,6 +437,7 @@ function renderLeaves() {
 }
 
 
+// Generates the pot body, shadow, fan shapes, arches, and dot decorations from the pot preset.
 function renderCeramicPot() {
   let appearance = potAppearanceOptions[0];
   let centerX = 442.5;
@@ -413,7 +446,7 @@ function renderCeramicPot() {
   let height = 205;
   let side = appearance.sidePoints;
 
-  // Build the original curved outline.
+  // Builds the pot's original smooth closed outline.
   let points = [[centerX, top]];
 
   for (let i = 0; i < side.length; i++) {
@@ -430,14 +463,14 @@ function renderCeramicPot() {
   let archRadius = width * 0.13;
   let line = appearance.lineColor;
 
-  // Original shadow bands near the neck.
+  // Generates a fading shadow band near the neck of the pot.
   let shadowBands = [];
 
   for (let i = 0; i < 10; i++) {
     shadowBands.push('<rect x="' + (centerX - width / 2 - 10) + '" y="' + (top + 8 + i * 3) + '" width="' + (width + 20) + '" height="3" fill="' + appearance.shadowColor + '" opacity="' + (46 - i * 4.6) / 255 + '"/>');
   }
 
-  // Original fan shapes on the shoulders.
+  // Generates fan-shaped decorations on the shoulder of the pot.
   let shoulderFans = [];
   for (let i = 0; i < 13; i++) {
     let x = centerX + (i - 6) * 22;
@@ -445,7 +478,7 @@ function renderCeramicPot() {
     shoulderFans.push('<path d="M ' + (x - 11) + " " + y + " A 11 11 0 0 0 " + (x + 11) + " " + y + '" fill="none" stroke="' + line + '" stroke-width="2.5"/>');
   }
 
-  // Original middle arches and decorative dots.
+  // Generates arches and decorative dots in the middle of the pot.
   let arches = [];
   let dots = [];
 
@@ -456,7 +489,7 @@ function renderCeramicPot() {
       svgCircle("pot-shoulder-dot-" + (i + 1), x + archRadius, stripeY - archRadius * 0.9, 2.5, line));
   }
 
-  // Original lower semicircles.
+  // Generates semicircular decorations at the bottom of the pot.
   let lowerSemicircles = [];
 
   for (let i = 0; i < 7; i++) {
@@ -467,7 +500,7 @@ function renderCeramicPot() {
       " 0 0 1 " + (x + radius) + " " + y + '" fill="none" stroke="' + line + '" stroke-width="3.5"/>');
   }
 
-  // Original shadow and clipping definitions.
+  // Defines the pot shadow filter and a clipping path that limits the decoration area.
   let text = '<defs>' +
     '<filter id="pot-soft-shadow" x="-20%" y="-20%" width="140%" height="160%">' +
     '<feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#493423" flood-opacity="0.24"/>' +
@@ -485,6 +518,7 @@ function renderCeramicPot() {
   return text;
 }
 
+// Generates the complete SVG bouquet scene for the project.
 function generateSVG() {
   createLeaves();
   createSmallFlowerLooks();
@@ -516,43 +550,43 @@ function generateSVG() {
 
 let NOTICE_FRAMES = 270;
 let noticeStartFrame = null;
+// Displays a temporary message at the top of the page.
 function showNotice(message) {
   let notice = document.getElementById('notice');
   if (!notice) return;
   notice.textContent = message;
   noticeStartFrame = frameCount;
 }
+// Checks each frame whether the temporary message has expired and restores the default interaction instructions.
 function updateNotice() {
   if (noticeStartFrame === null) return;
   if (frameCount - noticeStartFrame < NOTICE_FRAMES) return;
   let notice = document.getElementById('notice');
-  if (notice) notice.textContent = 'Click the artwork for a watering can, scroll to pour water, and drag the sun to move it.';
+  if (notice) notice.textContent = 'Click once to show the watering can, click again to pour water, and drag the sun to move it.';
   noticeStartFrame = null;
 }
+// p5.js initialisation entry point; runs once when the page starts.
 function setup() {
   noCanvas();
   frameRate(60);
   setupFlowers();
   setupInput();
   setupAudio();
-  let saveButton = document.getElementById('save');
-  if (saveButton) saveButton.addEventListener('click', savePicture);
 }
 
-function savePicture() {
-  showNotice('PNG export needs code beyond the provided course lessons.');
-}
+// p5.js main loop; connects the four mechanisms in a fixed order every frame.
 function draw() {
   updateTime();
   updateInput();
   updateNotice();
   updateFlowers();
   updateRegularFlowerLayers();
-  // V7 lifecycle uses frameCount and watering frames, not the day progress.
+  // The lifecycle uses frameCount and the watering frame rather than the day-night progress directly.
   updateLifecycle();
   updateAudio();
 }
 
+// Determines whether a stem ID belongs to one of the nine small red flowers.
 function isRedStem(id) {
   for (let i = 0; i < visualSmallFlowers.length; i++) {
     if (id === "stem-red-0" + (i + 1)) return true;
@@ -560,17 +594,20 @@ function isRedStem(id) {
   return false;
 }
 
+// Calculates seed-shake intensity as it decays over time after seed release.
 function getSeedShake(flower) {
   let shake = flower.seedShake - (frameCount - flower.seedShakeFrame) / 60 * 2.6;
   if (shake < 0) shake = 0;
   return shake;
 }
 
+// Records a flower's new seed-shake intensity and starting frame.
 function setSeedShake(flower, value) {
   flower.seedShake = value;
   flower.seedShakeFrame = frameCount;
 }
 
+// Restores a flower to its not-yet-grown state.
 function resetFlowerGrowth(flower) {
   flower.growthProgress = 0;
   flower.bloomProgress = 0;
@@ -579,6 +616,7 @@ function resetFlowerGrowth(flower) {
   resetFlowerMovement(flower);
 }
 
+// Clears the Perlin-noise sway state of one flower.
 function resetFlowerMovement(flower) {
   flower.swayAngle = 0;
   flower.swayY = 0;
@@ -586,6 +624,7 @@ function resetFlowerMovement(flower) {
   flower.movementStartFrame = null;
 }
 
+// Calculates stem extension and flower-head opening stages from elapsed growth time.
 function setFlowerGrowth(flower, seconds) {
   flower.growthElapsed = seconds;
   if (flower.growthElapsed < 0) flower.growthElapsed = 0;
@@ -606,6 +645,7 @@ function setFlowerGrowth(flower, seconds) {
   }
 }
 
+// Finds the position and direction angle at a specified ratio along sampled stem points.
 function stemPointAt(points, t) {
   let value = constrain(t, 0, 1) * (points.length - 1);
   let index = floor(value);
@@ -616,6 +656,7 @@ function stemPointAt(points, t) {
           lerp(a[2], b[2], amount)];
 }
 
+// Builds all leaf data from stem length, leaf-count rules, and random parameters.
 function createLeaves() {
   currentLeaves = [];
   currentLeafProfiles = [];
@@ -629,8 +670,8 @@ function createLeaves() {
     if (red) rule = leafRules.smallFlower;
     let base = points[0], top = points[points.length - 1];
     let stemLength = dist(base[0], base[1], top[0], top[1]);
-    let count = round(randomBetween(rule.count[0], rule.count[1]));
-    if (red) count = round(stemLength / rule.perPixels + randomBetween(-1, 1));
+    let count = round(random(rule.count[0], rule.count[1]));
+    if (red) count = round(stemLength / rule.perPixels + random(-1, 1));
     count = constrain(count, rule.count[0], rule.count[1]);
     if (!red) {
       let limit = floor(stemLength / 45);
@@ -640,7 +681,7 @@ function createLeaves() {
     let scale = constrain(stemLength / 230, 0.55, 1);
     let positions = [];
     for (let tries = 0; tries < 60 && positions.length < count; tries++) {
-      let place = randomBetween(rule.along[0], rule.along[1]);
+      let place = random(rule.along[0], rule.along[1]);
       let fits = true;
       for (let j = 0; j < positions.length; j++) {
         if (abs(positions[j] - place) < rule.gap) fits = false;
@@ -654,15 +695,15 @@ function createLeaves() {
         }
       }
     }
-    let side = randomChoice([-1, 1]);
+    let side = random([-1, 1]);
     for (let j = 0; j < positions.length; j++) {
       let along = positions[j];
       let point = stemPointAt(points, along);
-      let angle = point[2] + side * randomBetween(rule.angle[0], rule.angle[1]);
+      let angle = point[2] + side * random(rule.angle[0], rule.angle[1]);
       side = -side;
-      let length = randomBetween(rule.length[0], rule.length[1]) * scale;
-      let width = randomBetween(rule.width[0], rule.width[1]) * scale;
-      let colour = randomChoice(rule.colours);
+      let length = random(rule.length[0], rule.length[1]) * scale;
+      let width = random(rule.width[0], rule.width[1]) * scale;
+      let colour = random(rule.colours);
       let tipX = point[0] + cos(radians(angle)) * length;
       let tipY = point[1] + sin(radians(angle)) * length;
       currentLeaves.push([point[0], point[1], tipX, tipY, width, colour]);
@@ -683,11 +724,13 @@ function createLeaves() {
 }
 
 
-// time_mechanic.js calls this helper to find the already-created leaf container.
+// The time module uses this helper to access leaf containers that have already been created.
+// Finds an existing runtime SVG wrapper node by ID.
 function createRuntimeWrapper(element, id, className) {
   return document.getElementById(id);
 }
 
+// Writes the complete SVG into the page and creates the DOM references required by the animation mechanisms.
 function setupFlowers() {
   let container = document.getElementById('artwork');
   container.innerHTML = generateSVG();
@@ -703,6 +746,7 @@ function setupFlowers() {
   }
 }
 
+// Collects the SVG node, sampled points, and total length of every stem.
 function captureStems() {
   stemInfo = {};
   for (let i = 0; i < visualStems.length; i++) {
@@ -721,6 +765,7 @@ function captureStems() {
   }
 }
 
+// Restores the entire bouquet to its initial growth display state.
 function resetGrowth() {
   for (let i = 0; i < sunflowers.length; i++) resetFlowerGrowth(sunflowers[i]);
   stemProgress = {};
@@ -744,6 +789,7 @@ function resetGrowth() {
   }
 }
 
+// Calculates the longest time required for all main sunflowers to finish growing.
 function totalGrowthDuration() {
   let duration = 0;
   for (let i = 0; i < sunflowers.length; i++) {
@@ -753,18 +799,20 @@ function totalGrowthDuration() {
   return duration;
 }
 
-// V7 time_mechanic.js calls syncGrowth(progress). Keep its interface.
-// The day progress passed by that module must itself originate from frameCount.
+// The time module calls the syncGrowth interface with progress derived from frameCount.
+// Growth synchronisation entry point reserved for the time module.
 function syncGrowth(growthProgress) {
   syncGrowthToDay(growthProgress);
 }
 
+// Converts normalised progress into actual growth time and updates all flowers.
 function syncGrowthToDay(dayProgress) {
   let growthTime = constrain(dayProgress / 0.20, 0, 1) * totalGrowthDuration();
   for (let i = 0; i < sunflowers.length; i++) setFlowerGrowth(sunflowers[i], growthTime);
   drawGrowth(growthTime);
 }
 
+// Calculates the time elapsed since a specified stem finished extending.
 function secondsSinceStemDone(id, growthTime) {
   if (id === 'pot') {
     let last = 0;
@@ -788,8 +836,9 @@ function secondsSinceStemDone(id, growthTime) {
   return -1;
 }
 
+// Draws the unfolding of stems, leaves, main flower heads, and small red flowers from the current growth time.
 function drawGrowth(growthTime) {
-  // V7: the red flowers grow on the first watering; after that they stay visible.
+  // Small red flowers grow only after the first watering and remain visible afterwards.
   let redProgress = 1;
   if (!redGrown) {
     redProgress = easeInOutCubic(constrain(growthTime / STEM_DURATION, 0, 1));
@@ -826,6 +875,7 @@ function drawGrowth(growthTime) {
   for (let i = 0; i < visualSmallFlowers.length; i++) drawSmallFlower(i, smallProgress);
 }
 
+// Immediately sets the entire bouquet to its fully grown state.
 function finishGrowth() {
   redGrown = true;
   for (let i = 0; i < sunflowers.length; i++) {
@@ -844,6 +894,7 @@ function finishGrowth() {
   for (let i = 0; i < visualSmallFlowers.length; i++) drawSmallFlower(i, 1);
 }
 
+// Draws the visible path of one stem from its growth progress and adds the current sway offset.
 function drawStem(id, progress) {
   let info = stemInfo[id];
   if (!info) return;
@@ -882,6 +933,7 @@ function drawStem(id, progress) {
   info.path.setAttribute("visibility", "visible");
 }
 
+// Displays the scale and opacity of a specified leaf according to progress.
 function drawLeaf(index, progress) {
   let group = document.getElementById('leaf-' + (index + 1));
   if (!group) return;
@@ -895,6 +947,7 @@ function drawLeaf(index, progress) {
   group.setAttribute('opacity', formatNumber(p * 0.85));
 }
 
+// Displays a main sunflower head according to its opening progress.
 function drawFlowerHead(flower, progress) {
   let g = document.getElementById(flower.spec.id);
   if (!g) return;
@@ -906,6 +959,7 @@ function drawFlowerHead(flower, progress) {
   g.setAttribute('opacity', formatNumber(p));
 }
 
+// Displays a specified small red flower according to progress.
 function drawSmallFlower(index, progress) {
   let f = visualSmallFlowers[index];
   let g = document.getElementById(f[0]);
@@ -916,17 +970,18 @@ function drawSmallFlower(index, progress) {
   g.setAttribute('opacity', formatNumber(p));
 }
 
+// Replaces a specified main sunflower with a new random appearance while preserving its stem and current growth process.
 function renewSunflower(index) {
   let old = sunflowers[index];
   if (!old) return null;
-  // makeSunflower() is in perlin_randomness.js and always chooses new random values.
+  // makeSunflower belongs to the Perlin noise and randomness module and selects new appearance values on every call.
   let fresh = makeSunflower(old.spec, old.growthDelay);
   sunflowers[index] = fresh;
   let heads = document.getElementById("seven-sunflowers");
   let html = "";
   for (let i = 0; i < sunflowers.length; i++) html += renderSunflowerWithSway(sunflowers[i]);
   heads.innerHTML = html;
-  // Only refresh DOM references; do not reset the already-growing plants.
+  // Refreshes only the DOM references without resetting plants already in the growth process.
   for (let i = 0; i < sunflowers.length; i++) {
     let id = sunflowers[i].spec.id;
     flowerWrappers[id] = document.getElementById(id + "-sway-wrapper");
@@ -940,6 +995,7 @@ function renewSunflower(index) {
   return fresh;
 }
 
+// Calculates regular motion not produced by Perlin noise, including seed shake, ageing droop, and input displacement.
 function getRegularMotion(flower, seconds, phaseOffset) {
   let result = { shakeX: 0, shakeAngle: 0, droopAngle: 0, ageingY: 0,
                  inputX: 0, inputY: 0 };
@@ -956,6 +1012,7 @@ function getRegularMotion(flower, seconds, phaseOffset) {
   return result;
 }
 
+// Converts the tilt state produced by sun-following interaction into an SVG transform string.
 function getInputTiltTransform(flower) {
   let transform = "";
   if (flower.inputTilt > 0.0001) {
@@ -973,6 +1030,7 @@ function getInputTiltTransform(flower) {
   return transform;
 }
 
+// Applies the layered flower-head displacement produced by user input to all main sunflowers every frame.
 function updateRegularFlowerLayers() {
   if (typeof shiftHeadLayers === "function") {
     for (let i = 0; i < sunflowers.length; i++) shiftHeadLayers(sunflowers[i]);
