@@ -1,6 +1,8 @@
+// Time-based mechanic: sky changes, flower ageing and regrowth.
+// The module tracks time with frameCount and blends sky RGB values with lerp().
 // PART 1: DAY AND NIGHT
 
-// One day lasts 1800 frames (about 30 seconds at 60 FPS).
+// One full day-night cycle lasts 1800 frames (about 30 seconds at 60 FPS).
 let timeDayLength = 1800;
 let timeDayStartFrame = null;
 let timeDayNumber = 1;
@@ -8,7 +10,7 @@ let timePhase = "Dawn";
 let timeProgress = 0;
 let timeMoon = 0;
 
-// Each row stores progress, red, green and blue.
+// Each row stores a point in the cycle (0 to 1), followed by RGB values.
 let timeSkyColours = [
   [0, 246, 238, 221],
   [0.20, 255, 240, 207],
@@ -24,7 +26,7 @@ function updateTime() {
     timeDayStartFrame = frameCount;
   }
 
-  // Count days and daytime progress using frameCount only.
+  // Use frameCount to count cycles and find progress within the current cycle.
   let framesSinceStart = frameCount - timeDayStartFrame;
   timeDayNumber = floor(framesSinceStart / timeDayLength) + 1;
   let framesIntoDay = framesSinceStart % timeDayLength;
@@ -70,7 +72,8 @@ function updateTime() {
   }
 
   document.getElementById("day").textContent = "DAY " + dayText;
-  // Keep the original sun and moon transition times.
+  // Fade the moon in from 0.44 to 0.56, then out from 0.88 to 1.
+  // These transitions use cycle progress, separately from the phase labels.
   let moonAmount = smoothRange(0.44, 0.56, timeProgress) * (1 - smoothRange(0.88, 1, timeProgress));
   timeMoon = moonAmount;
   let sunAmount = 1 - moonAmount;
@@ -93,7 +96,7 @@ function updateTime() {
   );
 }
 
-// Blend the RGB numbers using lerp() rather than lerpColor().
+// Blend each RGB value between the colour stops around timeProgress.
 function timeSkyColour() {
   for (let i = 1; i < timeSkyColours.length; i++) {
     let current = timeSkyColours[i];
@@ -127,7 +130,7 @@ function timeSkyColour() {
 
 // PART 2: FLOWER LIFECYCLE
 
-// One watering keeps the sunflowers fresh for one day.
+// Start ageing after this many cycle lengths have passed since freshFrame.
 let WATER_LASTS_DAYS = 1;
 let plantGrowStartFrame = 0;
 let seenWaterFrame = null;
@@ -135,7 +138,7 @@ let freshFrame = 0;
 let waterWaiting = false;
 
 function updateLifecycle() {
-  // Check whether a new drop has watered the pot.
+  // Process each recorded watering frame once.
   if (plantWatered && lastWaterFrame !== seenWaterFrame) {
     if (seenWaterFrame === null) {
       plantGrowStartFrame = lastWaterFrame;
@@ -148,13 +151,14 @@ function updateLifecycle() {
     seenWaterFrame = lastWaterFrame;
   }
 
-  // Start regrowth only after the old bouquet has disappeared.
+  // Regrow after the bouquet has faded, but only if watering is waiting.
   if (waterWaiting && bouquetGone()) {
     renewFlowers();
     waterWaiting = false;
   }
 
-  // Growth and ageing are calculated from frameCount only.
+  // Measure growth from plantGrowStartFrame and time since refresh from freshFrame.
+  // Both use frameCount; reaching a new sky cycle does not reset them.
   let growthProgress = 0;
   let dry = 0;
   if (plantWatered) {
@@ -176,7 +180,7 @@ function updateLifecycle() {
 }
 
 function updateFlowerLife(flower, growthProgress, dry) {
-  // Keep the original opening and withering timings.
+  // Opening follows growth time. Ageing and bloom loss follow time since refresh.
   let opening = smoothRange(
     0.015,
     0.20,
@@ -217,7 +221,7 @@ function updateFlowerLife(flower, growthProgress, dry) {
 
 // PART 3: PETAL AND CENTRE FADING
 
-// Find petals by their known IDs, using getElementById().
+// Collect the SVG elements needed to fade each flower part.
 function bindFlowerParts(flower, group) {
   let id = flower.spec.id;
   let petals = [];
@@ -243,7 +247,8 @@ function bindFlowerParts(flower, group) {
     );
   }
 
-  // Five centre layers fade after the petals.
+  // The five centre layers share a later fade threshold than the petals.
+  // The final petals may still be fading when the centres start.
   for (let layer = 5; layer >= 1; layer--) {
     centreLayers.push(
       document.getElementById(
@@ -252,7 +257,7 @@ function bindFlowerParts(flower, group) {
     );
   }
 
-  // Give different sunflowers slightly different fading times.
+  // Give each flower a consistent fade offset based on its ID.
   let flowerOffset = ((stableNoiseOffset(id + "-age") % 9) - 4) * 0.02;
 
   flower.visualParts = [];
@@ -296,7 +301,7 @@ function updateFlowerParts(flower) {
     if (fade > 0.72) {
       flower.needsRegrowth = true;
     }
-    // fade in place, without falling or spinning.
+    // fallProgress controls fading here. Drift and spin are not applied.
     part.element.setAttribute(
       "opacity",
       "" + (1 - fade)
@@ -306,6 +311,7 @@ function updateFlowerParts(flower) {
 
 // PART 4: LEAF AND STEM FADING
 
+// Store the SVG groups used to fade the leaves.
 function captureLeafWrappers() {
   leafLifecycleWrappers = [];
   for (let index = 0; index < currentLeaves.length; index++) {
@@ -321,13 +327,13 @@ function drawFlowerLife(flower) {
   let group = document.getElementById(
     flower.spec.id
   );
-  // Preserve the growth opacity while individual parts fade.
+  // Set the whole flower group opacity from bloomProgress.
   group.setAttribute(
     "opacity",
     "" + flower.bloomProgress
   );
 
-  // Make the stem fade gradually, just as before.
+  // Fade the matching stem using this flower's withering progress.
   let stemId = MAIN_STEM_BY_FLOWER[
     flower.spec.id
   ];
@@ -353,6 +359,7 @@ function drawFlowerLife(flower) {
   }
 }
 
+// Use average flower withering to fade the leaves attached to the pot.
 function witherPotLeaves() {
   let total = 0;
   for (let i = 0; i < sunflowers.length; i++) {
@@ -395,7 +402,7 @@ function witherLeaf(index, fade) {
     fade
   );
 
-  // Keep the V8 effect: the leaf fades without moving or rotating.
+  // Fade the leaf in place, with a slightly different start point for each leaf.
   leaf.setAttribute(
     "opacity",
     "" + (1 - constrain(progress, 0, 1))
@@ -404,6 +411,7 @@ function witherLeaf(index, fade) {
 
 // PART 5: WATERING AND REGROWTH
 
+// Return true if at least one flower is marked as needing regrowth.
 function bouquetWithering() {
   let withering = false;
   for (let index = 0; index < sunflowers.length; index++) {
@@ -414,6 +422,7 @@ function bouquetWithering() {
   return withering;
 }
 
+// Return true when every flower has finished withering and has almost no bloom left.
 function bouquetGone() {
   let gone = true;
   for (let index = 0; index < sunflowers.length; index++) {
@@ -427,6 +436,7 @@ function bouquetGone() {
   }
   return gone;
 }
+// Refresh the freshness frame and refill seed reserves without restarting growth.
 function waterFlowers() {
   freshFrame = lastWaterFrame;
   for (let index = 0; index < sunflowers.length; index++) {
@@ -435,6 +445,7 @@ function waterFlowers() {
   }
 }
 
+// Reset growth and freshness timing when pending watering triggers regrowth.
 function renewFlowers() {
 
   plantGrowStartFrame = frameCount;
@@ -442,13 +453,12 @@ function renewFlowers() {
 
   let replaced = false;
 
-  // Call the existing sketch.js function to replace each old flower.
-  // The helper redraws SVG and refreshes the element references.
+  // Use the shared renewal function to replace flowers marked for regrowth.
   for (let index = 0; index < sunflowers.length; index++) {
     if (sunflowers[index].needsRegrowth) {
       let fresh = renewSunflower(index);
       if (fresh) {
-        // Match the previous lifecycle: new flowers grow together.
+        // Remove the delay so replacement flowers start growing together.
         fresh.growthDelay = 0;
         replaced = true;
       }
@@ -458,7 +468,7 @@ function renewFlowers() {
   resetGrowth();
 
   if (replaced) {
-    // Refresh the swaying references after the flower heads change.
+    // Refresh sway references for the new flowers, keeping the auxiliary states.
     let redStates = auxStates;
     resetSway();
     captureSway();
